@@ -9,5 +9,7 @@ router.post("/datatable", incidentController.getDataTable);
 router.get("/", authenticate, incidentController.getIncidents);
 router.get("/pending-count", authenticate, incidentController.getPendingCount);
 router.put("/:id/resolve", authenticate, incidentController.resolveIncident);
+router.delete("/:id", authenticate, incidentController.deleteIncident);
+router.delete("/:id/media", authenticate, incidentController.deleteMedia);
 
 export default router;

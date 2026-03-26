@@ -1,38 +1,25 @@
-import AWS from "aws-sdk";
+import { S3Client, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { Upload } from "@aws-sdk/lib-storage";
 import "multer";
 
-import https from "https";
-
 export class StorageService {
-  private s3: AWS.S3;
+  private client: S3Client;
 
   constructor() {
-    this.s3 = new AWS.S3({
-      endpoint: process.env.SUPABASE_S3_ENDPOINT,
-      region: process.env.SUPABASE_S3_REGION,
+    this.client = new S3Client({
+      region: process.env.AWS_REGION || "us-east-2",
       credentials: {
-        accessKeyId: process.env.SUPABASE_ACCESS_KEY_ID || "",
-        secretAccessKey: process.env.SUPABASE_SECRET_ACCESS_KEY || "",
-      },
-      s3ForcePathStyle: true,
-      signatureVersion: "v4",
-      httpOptions: {
-        agent: new https.Agent({ keepAlive: true }),
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
       },
     });
   }
 
-  // ---------------------------
-  // LIST BUCKETS (debug / admin)
-  // ---------------------------
-  async listBuckets(): Promise<AWS.S3.Bucket[]> {
-    const data = await this.s3.listBuckets().promise();
-    return data.Buckets || [];
-  }
-
-  // ---------------------------
-  // UPLOAD FILE (PRIVATE)
-  // ---------------------------
+  /**
+   * UPLOAD FILE
+   * Uses @aws-sdk/lib-storage for efficient multipart uploads
+   */
   async uploadFile(
     file: Express.Multer.File,
     bucketName: string,
@@ -40,15 +27,18 @@ export class StorageService {
   ): Promise<{ bucket: string; key: string }> {
     const key = customKey || `${Date.now()}_${file.originalname}`;
 
-    await this.s3
-      .putObject({
+    const upload = new Upload({
+      client: this.client,
+      params: {
         Bucket: bucketName,
         Key: key,
         Body: file.buffer,
         ContentType: file.mimetype,
-        ACL: 'public-read',
-      })
-      .promise();
+        // ACL: 'public-read' // Note: This depends on bucket policy and block public access settings
+      },
+    });
+
+    await upload.done();
 
     return {
       bucket: bucketName,
@@ -56,45 +46,30 @@ export class StorageService {
     };
   }
 
-  // ---------------------------
-  // SIGNED URL (READ)
-  // ---------------------------
+  /**
+   * SIGNED URL (READ)
+   * Generates a temporary link to access a private file
+   */
   async getSignedReadUrl(
     bucketName: string,
     key: string,
     expiresInSeconds = 900 // 15 min
   ): Promise<string> {
-    return this.s3.getSignedUrlPromise("getObject", {
+    const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
-      Expires: expiresInSeconds,
     });
+    return getSignedUrl(this.client, command, { expiresIn: expiresInSeconds });
   }
 
-  // ---------------------------
-  // SIGNED URL (UPLOAD DIRECT)
-  // ---------------------------
-  async getSignedUploadUrl(
-    bucketName: string,
-    key: string,
-    expiresInSeconds = 300 // 5 min
-  ): Promise<string> {
-    return this.s3.getSignedUrlPromise("putObject", {
-      Bucket: bucketName,
-      Key: key,
-      Expires: expiresInSeconds,
-    });
-  }
-
-  // ---------------------------
-  // DELETE FILE
-  // ---------------------------
+  /**
+   * DELETE FILE
+   */
   async deleteFile(bucketName: string, key: string): Promise<void> {
-    await this.s3
-      .deleteObject({
-        Bucket: bucketName,
-        Key: key,
-      })
-      .promise();
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+    await this.client.send(command);
   }
 }

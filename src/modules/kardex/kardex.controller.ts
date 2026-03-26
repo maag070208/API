@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import { createTResult } from "@src/core/mappers/tresult.mapper";
-import { registerCheck, getKardex, getKardexById, updateKardex, getDataTableKardex } from "./kardex.service";
+import { registerCheck, getKardex, getKardexById, updateKardex, getDataTableKardex, deleteKardex, updateKardexMedia } from "./kardex.service";
+import { StorageService } from "../storage/storage.service";
+
+const storageService = new StorageService();
 
 export const createKardexEntry = async (req: Request, res: Response) => {
   try {
@@ -96,6 +99,67 @@ export const getDataTableKardexEntries = async (req: Request, res: Response) => 
     return res.status(200).json(createTResult(result));
   } catch (error: any) {
     console.error(error);
+    return res.status(500).json(createTResult(null, error.message));
+  }
+};
+
+export const deleteKardexEntry = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const entry = await getKardexById(Number(id));
+    
+    if (!entry) {
+      return res.status(404).json(createTResult(null, ["Registro no encontrado"]));
+    }
+
+    /* 
+    NOTE: User requested NOT to delete files from S3 when deleting the record.
+    Files are only deleted via deleteMedia (individual deletion).
+    */
+
+    await deleteKardex(Number(id));
+    return res.status(200).json(createTResult(true));
+  } catch (error: any) {
+    return res.status(500).json(createTResult(null, error.message));
+  }
+};
+
+export const deleteMedia = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { key } = req.query;
+
+    if (!key) {
+      return res.status(400).json(createTResult(null, ["Falta el key del archivo"]));
+    }
+
+    const entry = await getKardexById(Number(id));
+    if (!entry || !entry.media) {
+      return res.status(404).json(createTResult(null, ["Registro o media no encontrada"]));
+    }
+
+    // 1. Delete from S3
+    const bucketName = process.env.AWS_BUCKET_NAME;
+    if (bucketName) {
+      try {
+        await storageService.deleteFile(bucketName, String(key));
+      } catch (err) {
+        console.error("Error deleting from S3:", err);
+      }
+    }
+
+    // 2. Update DB
+    const media = entry.media as any[];
+    const updatedMedia = media.filter((m: any) => {
+      if (!m) return false;
+      const mKey = m.key || (typeof m.url === 'string' ? m.url.split('/').pop() : null);
+      return mKey !== String(key);
+    });
+    
+    await updateKardexMedia(Number(id), updatedMedia);
+
+    return res.status(200).json(createTResult(true));
+  } catch (error: any) {
     return res.status(500).json(createTResult(null, error.message));
   }
 };

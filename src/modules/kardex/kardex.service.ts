@@ -237,3 +237,16 @@ export const getDataTableKardex = async (params: {
     total,
   };
 };
+
+export const deleteKardex = async (id: number) => {
+    return prismaClient.kardex.delete({
+        where: { id }
+    });
+};
+
+export const updateKardexMedia = async (id: number, media: any[]) => {
+    return prismaClient.kardex.update({
+        where: { id },
+        data: { media }
+    });
+};

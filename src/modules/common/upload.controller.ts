@@ -10,7 +10,7 @@ export const uploadFile = async (req: Request, res: Response) => {
       return res.status(400).json(createTResult(null, ["No file uploaded"]));
     }
 
-    const bucketName = process.env.SUPABASE_BUCKET_NAME;
+    const bucketName = process.env.AWS_BUCKET_NAME;
     if (!bucketName) {
       throw new Error("Storage bucket name not configured");
     }
@@ -20,8 +20,6 @@ export const uploadFile = async (req: Request, res: Response) => {
     const locationName = req.body.location || "unknown";
     
     // Format: name_quiensubio_locacion_fechayhora_minuto_segudo
-    // Example: originalname_username_location_YYYYMMDD_HH_mm_ss
-    // Using date-fns or just simple date formatting
     const now = new Date();
     const dateStr = now.toISOString().replace(/[-:T.]/g, "").slice(0, 14); // YYYYMMDDHHmmss
 
@@ -35,14 +33,15 @@ export const uploadFile = async (req: Request, res: Response) => {
 
     const result = await storageService.uploadFile(req.file, bucketName, finalName);
     
-    const endpoint = process.env.SUPABASE_S3_ENDPOINT!;
-    const publicEndpoint = endpoint.replace('.storage.supabase.co/storage/v1/s3', '.supabase.co/storage/v1/object/public');
-    const fullUrl = `${publicEndpoint}/${bucketName}/${finalName}`;
+    // AWS S3 Public URL format: https://bucket.s3.region.amazonaws.com/key
+    const region = process.env.AWS_REGION || 'us-east-2';
+    const fullUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${finalName}`;
 
     // Return the URL and metadata
     return res.status(200).json(
       createTResult({
         url: fullUrl,
+        type: req.file.mimetype.startsWith('video/') ? 'VIDEO' : 'IMAGE',
         mimetype: req.file.mimetype,
         size: req.file.size,
         bucket: result.bucket,

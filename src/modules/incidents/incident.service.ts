@@ -109,3 +109,23 @@ export const getPendingIncidentsCount = async () => {
         }
     });
 };
+
+export const getIncidentById = async (id: number) => {
+    return prismaClient.incident.findUnique({
+        where: { id },
+        include: { guard: true }
+    });
+};
+
+export const deleteIncident = async (id: number) => {
+    return prismaClient.incident.delete({
+        where: { id }
+    });
+};
+
+export const updateIncidentMedia = async (id: number, media: any[]) => {
+    return prismaClient.incident.update({
+        where: { id },
+        data: { media }
+    });
+};
