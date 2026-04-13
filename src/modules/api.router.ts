@@ -11,6 +11,7 @@ import incidentRoute from "./incidents/incident.routes";
 import roundRoute from "./rounds/round.routes";
 import scheduleRoute from "./schedules/schedule.routes";
 import maintenanceRoute from "./maintenance/maintenance.routes";
+import reportRoute from "./reports/report.routes";
 
 
 const apiRouter = Router();
@@ -26,6 +27,7 @@ apiRouter.use("/incidents", incidentRoute);
 apiRouter.use("/rounds", roundRoute);
 apiRouter.use("/schedules", scheduleRoute);
 apiRouter.use("/maintenance", maintenanceRoute);
+apiRouter.use("/reports", reportRoute);
 
 
 export default apiRouter;
